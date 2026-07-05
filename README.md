@@ -1,14 +1,10 @@
-# astrbot-plugin-helloworld
+# astrbot-plugin-checkwtplayerlist
 
-AstrBot 插件模板 / A template plugin for AstrBot plugin feature
+一个用于战雷对局查询的AstrBot插件 / A plugin for checking War Thunder match stats
 
-> [!NOTE]
-> This repo is just a template of [AstrBot](https://github.com/AstrBotDevs/AstrBot) Plugin.
-> 
-> [AstrBot](https://github.com/AstrBotDevs/AstrBot) is an agentic assistant for both personal and group conversations. It can be deployed across dozens of mainstream instant messaging platforms, including QQ, Telegram, Feishu, DingTalk, Slack, LINE, Discord, Matrix, etc. In addition, it provides a reliable and extensible conversational AI infrastructure for individuals, developers, and teams. Whether you need a personal AI companion, an intelligent customer support agent, an automation assistant, or an enterprise knowledge base, AstrBot enables you to quickly build AI applications directly within your existing messaging workflows.
+> [!IMPORTANT]
+> 相关功能可能会有互联网访问需求，请确保你的网络环境允许访问互联网。
 
-# Supports
+## Feedback
 
-- [AstrBot Repo](https://github.com/AstrBotDevs/AstrBot)
-- [AstrBot Plugin Development Docs (Chinese)](https://docs.astrbot.app/dev/star/plugin-new.html)
-- [AstrBot Plugin Development Docs (English)](https://docs.astrbot.app/en/dev/star/plugin-new.html)
+- [反馈群](http://qm.qq.com/cgi-bin/qm/qr?_wv=1027&k=g57uEy5szRdbRg5NFTSR9a4_CpzomLui&authKey=Qqv3ODTHLIRPBhgcAIQkYWsxdT6cFSeT5x8AAR%2BUa1R1B0Q7hOEICPJqhxtVuIQB&noverify=0&group_code=419835680)
