@@ -19,15 +19,14 @@ class MyPlugin(Star):
             engine="paddle",
         )
     def extract_room_id(self, text: str):
-        parts = text.split()
-        for p in parts:
-            if ":" in p:
-                continue
-            if "FPS" in p or "Ping" in p:
-                continue
-            if len(p) >= 10:
-                return p
-        return parts[0] if parts else text
+        import re
+        matches = re.findall(
+            r"[0-9a-f]{15}",
+            text
+        )
+        if matches:
+            return matches[0]
+        return None
     def run_ocr(self, image_path):
         import cv2
         img = cv2.imread(image_path)
@@ -40,13 +39,14 @@ class MyPlugin(Star):
         result = self.ocr.predict(cropped_img)
         data = result[0]
         rec_texts = data.get("rec_texts", [])
+        logger.info(rec_texts)
         if not rec_texts:
             return "未识别到内容"
-        #清洗逻辑
-        last = rec_texts[-1]
-        #处理
-        room_id = self.extract_room_id(last)
-        return room_id
+        for text in rec_texts:
+            room_id = self.extract_room_id(text)
+            if room_id:
+                return room_id
+        return "未成功识别到房间ID,请手动输入文字"
     # 注册指令的装饰器。指令名为 room。注册成功后，发送 `/room` 就会触发这个指令!`
     @filter.command("room")
     async def room(self, event: AstrMessageEvent):
@@ -63,15 +63,15 @@ class MyPlugin(Star):
                 if t:
                     texts.append(t)
         if len(images) > 0 and len(texts) > 0:
-            yield event.plain_result("不支持图文混合")
+            yield event.plain_result("不支持混合输入")
             return
         if len(images) == 1:
             room_id = self.run_ocr(images[0].file)
             yield event.plain_result(room_id)
             return
-        if len(texts) > 0:
+        if len(texts) > 0 and len(texts) < 16:
             yield event.plain_result(" ".join(texts))
             return
-        yield event.plain_result("请输入图片或文本")
+        yield event.plain_result("只支持一张完整截图或正确的房间号")
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
