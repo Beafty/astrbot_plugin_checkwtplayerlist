@@ -1,55 +1,44 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
-from astrbot.api import logger
 import astrbot.api.message_components as Comp
-import asyncio
-import re
+from astrbot.api import AstrBotConfig
+from .ocr import OCRHelper
+from .api import RoomAPI
+from .utils import check_room_id
 
-@register("checkwtplayerlist", "Beafty_win", "一个用于战雷对局查询的AstrBot插件", "0.0.1")
+@register(
+    "checkwtplayerlist",
+    "Beafty_win",
+    "一个用于战雷对局查询的AstrBot插件",
+    "0.0.1"
+)
 class MyPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context,config: AstrBotConfig):
         super().__init__(context)
-        self.ocr = None
+        self.ocr = OCRHelper()
+        self.config = config
+        self.api = None
 
-    async def initialize(self):
+    def get_api_url(self):
         try:
-            from paddleocr import PaddleOCR
-            self.ocr = PaddleOCR(
-                use_doc_orientation_classify=False,
-                use_doc_unwarping=False,
-                use_textline_orientation=False,
-                engine="paddle",
-            )
-            logger.info("PaddleOCR初始化成功")
-        except Exception as e:
-            logger.error(f"PaddleOCR初始化失败: {e}")
+            api_url = self.config.get("api_url", "")
+        except AttributeError:
+            try:
+                api_url = self.config["api_url"]
+            except KeyError:
+                api_url = ""
+        return str(api_url or "").strip()
 
-    def extract_room_id(self, text: str):
-        result = re.findall(r"[0-9a-f]{15}", text)
-        return result[0] if result else None
-
-    def _run_ocr_sync(self, image_path):
-        import cv2
-        if self.ocr is None:
-            return "OCR未初始化"
-        img = cv2.imread(image_path)
-        if img is None:
-            return "图片读取失败"
-        h, w, _ = img.shape
-        cropped_img = img[int(h * 0.98):h, 0:int(w * 0.3)]
-        result = self.ocr.predict(cropped_img)
-        rec_texts = result[0].get("rec_texts", [])
-        for text in rec_texts:
-            room_id = self.extract_room_id(text)
-            if room_id:
-                return room_id
-        return "未成功识别到房间ID,请手动输入房间号"
-
-    async def run_ocr(self, image_path):
-        return await asyncio.to_thread(self._run_ocr_sync, image_path)
-
-    @filter.command("room")
-    async def room(self, event: AstrMessageEvent):
+    def get_api(self):
+        api_url = self.get_api_url()
+        if not api_url:
+            return None
+        if self.api is None or self.api.url != api_url:
+            self.api = RoomAPI(api_url)
+        return self.api
+    async def initialize(self):
+        await self.ocr.initialize()
+    def parse_message(self, event: AstrMessageEvent):
         images = []
         texts = []
         for m in event.message_obj.message:
@@ -61,29 +50,36 @@ class MyPlugin(Star):
                     text = text[5:].strip()
                 if text:
                     texts.append(text)
+        return images, texts
+    @filter.command("room")
+    async def room(self,event: AstrMessageEvent):
+        api = self.get_api()
+        if api is None:
+            yield event.plain_result("请先在插件配置中填写查询服务器地址（api_url）")
+            return
+        images, texts = self.parse_message(event)
         if images and texts:
             yield event.plain_result("不支持混合输入")
             return
+        room_id = None
         if len(images) == 1:
-            room_id = await self.run_ocr(images[0].file)
-            yield event.plain_result(room_id)
-            return
-        if len(texts) == 1:
+            room_id = await self.ocr.recognize(images[0].file)
+            if room_id is None:
+                yield event.plain_result("未成功识别到房间ID,请手动输入房间号")
+                return
+        elif len(texts) == 1:
             room_id = texts[0]
-            if len(room_id) == 15:
-                if all(c in "0123456789abcdef" for c in room_id):
-                    yield event.plain_result(room_id)
-                else:
-                    yield event.plain_result("房间号应为全小写16进制")
-            else:
-                yield event.plain_result("房间号长度错误")
+        else:
+            yield event.plain_result("只支持一张完整截图或正确的房间号")
             return
-        yield event.plain_result("只支持一张完整截图或正确的房间号")
-
-    @filter.command("test")
-    async def test_(self, event: AstrMessageEvent):
-        platforms = self.context.platform_manager.get_insts()
-        logger.info(f"当前平台列表: {platforms}")
-
+        if not check_room_id(room_id):
+            yield event.plain_result("房间号格式错误")
+            return
+        result = await api.send_room_id(room_id)
+        if result is None:
+            yield event.plain_result("查询服务器异常")
+            return
+        yield event.plain_result(str(result))
     async def terminate(self):
         pass
+

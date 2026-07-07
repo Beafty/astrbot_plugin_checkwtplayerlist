@@ -1,0 +1,8 @@
+{
+    "api_url": {
+        "description": "API地址",
+        "type": "string",
+        "default": "",
+        "hint": "查询服务器地址"
+    }
+}
