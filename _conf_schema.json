@@ -4,5 +4,17 @@
         "type": "string",
         "default": "",
         "hint": "查询服务器地址"
+    },
+    "api_method": {
+        "description": "请求方法",
+        "type": "string",
+        "default": "POST",
+        "hint": "GET/POST/PUT/PATCH/DELETE"
+    },
+    "api_param": {
+        "description": "房间号参数名",
+        "type": "string",
+        "default": "getroom",
+        "hint": "例如 example.com 使用 getroom(example.com/?getroom=123456) 作为房间号参数"
     }
 }

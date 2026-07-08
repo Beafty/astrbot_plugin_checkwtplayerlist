@@ -1,3 +1,4 @@
+import json
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 import astrbot.api.message_components as Comp
@@ -29,12 +30,39 @@ class MyPlugin(Star):
                 api_url = ""
         return str(api_url or "").strip()
 
+    def get_api_method(self):
+        try:
+            api_method = self.config.get("api_method", "POST")
+        except AttributeError:
+            try:
+                api_method = self.config["api_method"]
+            except KeyError:
+                api_method = "POST"
+        return RoomAPI.normalize_method(api_method)
+
+    def get_api_param(self):
+        try:
+            api_param = self.config.get("api_param", "getroom")
+        except AttributeError:
+            try:
+                api_param = self.config["api_param"]
+            except KeyError:
+                api_param = "getroom"
+        return str(api_param or "getroom").strip() or "getroom"
+
     def get_api(self):
         api_url = self.get_api_url()
+        api_method = self.get_api_method()
+        api_param = self.get_api_param()
         if not api_url:
             return None
-        if self.api is None or self.api.url != api_url:
-            self.api = RoomAPI(api_url)
+        if (
+            self.api is None
+            or self.api.url != api_url
+            or self.api.method != api_method
+            or self.api.param_name != api_param
+        ):
+            self.api = RoomAPI(api_url, api_method, api_param)
         return self.api
     async def initialize(self):
         await self.ocr.initialize()
@@ -51,6 +79,20 @@ class MyPlugin(Star):
                 if text:
                     texts.append(text)
         return images, texts
+    def format_api_result(self, result):
+        task = result.get("task", "")
+        data = result.get("data")
+        if isinstance(data, dict):
+            room_id = data.get("roomId") or data.get("room_id") or data.get("id") or ""
+            lines = ["查询成功"]
+            if task:
+                lines.append(f"任务: {task}")
+            if room_id:
+                lines.append(f"房间ID: {room_id}")
+            return "\n".join(lines)
+
+        text = json.dumps(result, ensure_ascii=False)
+        return text if len(text) <= 1500 else text[:1500] + "\n...(响应过长，已截断)"
     @filter.command("room")
     async def room(self,event: AstrMessageEvent):
         api = self.get_api()
@@ -79,7 +121,10 @@ class MyPlugin(Star):
         if result is None:
             yield event.plain_result("查询服务器异常")
             return
-        yield event.plain_result(str(result))
+        if result.get("state") != "ok":
+            yield event.plain_result(f"查询失败: {result.get('state', 'unknown')}")
+            return
+        yield event.plain_result(self.format_api_result(result))
     async def terminate(self):
         pass
 
