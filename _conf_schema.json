@@ -16,5 +16,18 @@
         "type": "string",
         "default": "getroom",
         "hint": "例如 example.com 使用 getroom(example.com/?getroom=123456) 作为房间号参数"
+    },
+    "t2i_mode": {
+        "description": "文生图方式",
+        "type": "string",
+        "default": "astrbot",
+        "options": ["astrbot", "local"],
+        "hint": "选择 AstrBot 内置文生图或本地服务"
+    },
+    "local_t2i_url": {
+        "description": "本地文生图地址",
+        "type": "string",
+        "default": "http://127.0.0.1:7778/text2img",
+        "hint": "当 t2i_mode=local 时使用"
     }
 }

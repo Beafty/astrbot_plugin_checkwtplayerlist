@@ -1,20 +1,25 @@
+﻿import asyncio
 import json
+import tempfile
+import urllib.request
+from jinja2 import Template
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 import astrbot.api.message_components as Comp
-from astrbot.api import AstrBotConfig
+from astrbot.api import AstrBotConfig, logger
 from .ocr import OCRHelper
 from .api import RoomAPI
-from .utils import check_room_id
+from .templates import ROOM_TEMPLATE
+from .utils import check_room_id,format_api_result,build_room_render_data
 
 @register(
     "checkwtplayerlist",
     "Beafty_win",
-    "一个用于战雷对局查询的AstrBot插件",
+    "一个用于战雷对局查询的 AstrBot 插件",
     "0.0.1"
 )
 class MyPlugin(Star):
-    def __init__(self, context: Context,config: AstrBotConfig):
+    def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.ocr = OCRHelper()
         self.config = config
@@ -64,8 +69,10 @@ class MyPlugin(Star):
         ):
             self.api = RoomAPI(api_url, api_method, api_param)
         return self.api
+
     async def initialize(self):
         await self.ocr.initialize()
+
     def parse_message(self, event: AstrMessageEvent):
         images = []
         texts = []
@@ -79,25 +86,82 @@ class MyPlugin(Star):
                 if text:
                     texts.append(text)
         return images, texts
-    def format_api_result(self, result):
-        task = result.get("task", "")
-        data = result.get("data")
-        if isinstance(data, dict):
-            room_id = data.get("roomId") or data.get("room_id") or data.get("id") or ""
-            lines = ["查询成功"]
-            if task:
-                lines.append(f"任务: {task}")
-            if room_id:
-                lines.append(f"房间ID: {room_id}")
-            return "\n".join(lines)
 
-        text = json.dumps(result, ensure_ascii=False)
-        return text if len(text) <= 1500 else text[:1500] + "\n...(响应过长，已截断)"
+    
+
+    def get_t2i_mode(self):
+        try:
+            mode = self.config.get("t2i_mode", "astrbot")
+        except AttributeError:
+            try:
+                mode = self.config["t2i_mode"]
+            except KeyError:
+                mode = "astrbot"
+        return str(mode or "astrbot").strip().lower()
+
+    def get_local_t2i_url(self):
+        try:
+            url = self.config.get("local_t2i_url", "http://127.0.0.1:7778/text2img")
+        except AttributeError:
+            try:
+                url = self.config["local_t2i_url"]
+            except KeyError:
+                url = "http://127.0.0.1:7778/text2img"
+        return str(url or "").strip()
+
+    def render_local_t2i_bytes(self, html: str, width: int, height: int):
+        url = self.get_local_t2i_url()
+        payload = json.dumps({
+            "html": html,
+            "width": width,
+            "height": height
+        }).encode("utf-8")
+
+        req = urllib.request.Request(
+            url,
+            data=payload,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=120) as resp:
+            return resp.read()
+
+    async def make_room_result(self, event, result):
+        options = {"viewport": {"width": 1180, "height": 760}}
+        data = build_room_render_data(result)
+        mode = self.get_t2i_mode()
+
+        try:
+            if mode == "local":
+                html = Template(ROOM_TEMPLATE).render(**data)
+                img_bytes = await asyncio.to_thread(
+                    self.render_local_t2i_bytes,
+                    html,
+                    1180,
+                    760,
+                )
+                tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                try:
+                    tmp.write(img_bytes)
+                    tmp.close()
+                    return event.image_result(tmp.name)
+                finally:
+                    try:
+                        tmp.close()
+                    except Exception:
+                        pass
+
+            url = await self.html_render(ROOM_TEMPLATE, data, options=options)
+            return event.image_result(url)
+        except Exception as e:
+            logger.warning(f"HTML 渲染图片失败: {e}")
+            return event.plain_result(format_api_result(result))
+
     @filter.command("room")
-    async def room(self,event: AstrMessageEvent):
+    async def room(self, event: AstrMessageEvent):
         api = self.get_api()
         if api is None:
-            yield event.plain_result("请先在插件配置中填写查询服务器地址（api_url）")
+            yield event.plain_result("请先在插件配置中填写查询服务器地址(api_url)")
             return
         images, texts = self.parse_message(event)
         if images and texts:
@@ -107,7 +171,7 @@ class MyPlugin(Star):
         if len(images) == 1:
             room_id = await self.ocr.recognize(images[0].file)
             if room_id is None:
-                yield event.plain_result("未成功识别到房间ID,请手动输入房间号")
+                yield event.plain_result("未成功识别到房间ID，请手动输入房间号")
                 return
         elif len(texts) == 1:
             room_id = texts[0]
@@ -121,10 +185,10 @@ class MyPlugin(Star):
         if result is None:
             yield event.plain_result("查询服务器异常")
             return
-        if result.get("state") != "ok":
+        if isinstance(result, dict) and "state" in result and result.get("state") != "ok":
             yield event.plain_result(f"查询失败: {result.get('state', 'unknown')}")
             return
-        yield event.plain_result(self.format_api_result(result))
+        yield await self.make_room_result(event, result)
+
     async def terminate(self):
         pass
-
