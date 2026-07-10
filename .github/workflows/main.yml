@@ -28,16 +28,15 @@ jobs:
         with:
           repository: gszabi99/War-Thunder-Datamine
           path: upstream
-          sparse-checkout: |
-            lang
-          sparse-checkout-cone-mode: true
           fetch-depth: 1
+          sparse-checkout: |
+            lang.vromfs.bin_u/lang
 
       - name: Remove old lang
         run: rm -rf lang
 
       - name: Copy new lang
-        run: cp -a upstream/lang ./lang
+        run: cp -a upstream/lang.vromfs.bin_u/lang ./lang
 
       - name: Cleanup
         run: rm -rf upstream
