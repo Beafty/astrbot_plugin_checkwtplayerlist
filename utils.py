@@ -9,15 +9,20 @@ def check_room_id(room_id: str):
     )
 
 def convert_mrank_to_br(mrank: str):
-    """将战雷内部整型 mrank 转换为玩家熟知的 BR（如 34 -> 11.3）"""
     if mrank is None or mrank == "":
         return "-"
     try:
-        mrank_int = int(mrank)
-        int_part = mrank_int // 3
-        rem = mrank_int % 3
-        frac = "0" if rem == 0 else ("3" if rem == 1 else "7")
-        return f"{int_part}.{frac}"
+        mrank_val = int(mrank)
+        br_val = (mrank_val / 3) + 1.0
+        int_part = int(br_val)
+        frac = br_val - int_part
+        if frac < 0.2:
+            s_frac = ".0"
+        elif frac < 0.5:
+            s_frac = ".3"
+        else:
+            s_frac = ".7"
+        return f"{int_part}{s_frac}"
     except (ValueError, TypeError):
         return str(mrank)
 
