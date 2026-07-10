@@ -2,6 +2,8 @@
 import json
 import tempfile
 import urllib.request
+from pathlib import Path
+import base64
 from jinja2 import Template
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
@@ -72,6 +74,15 @@ class MyPlugin(Star):
 
     async def initialize(self):
         await self.ocr.initialize()
+        font_path = (
+            Path(__file__).resolve().parent
+            / "fonts"
+            / "symbols_skyquake.ttf"
+        )
+
+        self.skyquake_font_base64 = base64.b64encode(
+            font_path.read_bytes()
+        ).decode("ascii")
 
     def parse_message(self, event: AstrMessageEvent):
         images = []
@@ -86,8 +97,6 @@ class MyPlugin(Star):
                 if text:
                     texts.append(text)
         return images, texts
-
-    
 
     def get_t2i_mode(self):
         try:
@@ -132,6 +141,7 @@ class MyPlugin(Star):
     async def make_room_result(self, event, result):
         options = {"viewport": {"width": 1180, "height": 760}}
         data = build_room_render_data(result)
+        data["skyquake_font_base64"] = self.skyquake_font_base64
         mode = self.get_t2i_mode()
 
         try:

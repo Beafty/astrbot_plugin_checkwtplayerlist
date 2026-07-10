@@ -5,6 +5,10 @@ ROOM_TEMPLATE = '''
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
+@font-face {
+    font-family: "SkyquakeSymbols";
+    src: url("data:font/ttf;base64,{{ skyquake_font_base64 }}") format("truetype");
+}
 * {
     box-sizing: border-box;
 }
@@ -138,9 +142,14 @@ tr:last-child td {
 }
 /* 载具 */
 .craft {
+    font-family:
+        "SkyquakeSymbols",
+        "Microsoft YaHei",
+        Arial,
+        sans-serif;
+
     padding: 2px 0;
     line-height: 1.4;
-    /*max-width: 260px;*/
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

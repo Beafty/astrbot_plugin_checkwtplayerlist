@@ -1,4 +1,47 @@
 import json
+import csv
+from pathlib import Path
+from functools import lru_cache
+
+@lru_cache(maxsize=1)
+def load_units_name_map():
+    units_name_map = {}
+    csv_path = Path(__file__).resolve().parent / "lang" / "units.csv"
+
+    if not csv_path.exists():
+        return units_name_map
+
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            unit_id = (row.get("<ID|readonly|noverify>") or "").strip().strip('"')
+            zh_name = (
+                row.get("<Chinese>")
+                or row.get("<TChinese>")
+                or row.get("<HChinese>")
+                or ""
+            ).strip().strip('"')
+
+            if not unit_id or not zh_name:
+                continue
+
+            units_name_map[unit_id] = zh_name
+
+            if unit_id.endswith("_shop"):
+                units_name_map[unit_id[:-5]] = zh_name
+
+    return units_name_map
+
+def translate_unit_name(name: str):
+    if not name:
+        return name
+    name = str(name).strip()
+    mp = load_units_name_map()
+
+    if name in mp:
+        return mp[name]
+
+    return mp.get(name.split("/")[-1], name)
 
 def check_room_id(room_id: str):
     if room_id is None:
@@ -59,7 +102,7 @@ def player_crafts_text(player):
         for craft in crafts_info:
             if not isinstance(craft, dict):
                 continue
-            name = craft.get("name") or "未知载具"
+            name = translate_unit_name(craft.get("name") or "未知载具")
             ctype = craft.get("type") or ""
             rank = craft.get("rank")
             mrank = craft.get("mrank")
@@ -79,7 +122,7 @@ def player_crafts_text(player):
 
     crafts = player.get("crafts")
     if isinstance(crafts, dict) and crafts:
-        return ", ".join(str(v) for _, v in sorted(crafts.items()))
+        return ", ".join(translate_unit_name(str(v)) for _, v in sorted(crafts.items()))
     return "-"
 
 def format_api_result(result):
