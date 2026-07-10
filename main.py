@@ -109,13 +109,16 @@ class MyPlugin(Star):
                 url = "http://127.0.0.1:7778/text2img"
         return str(url or "").strip()
 
-    def render_local_t2i_bytes(self, html: str, width: int, height: int):
+    def render_local_t2i_bytes(self, html: str, width: int, height: int | None = None):
         url = self.get_local_t2i_url()
-        payload = json.dumps({
+        payload_data = {
             "html": html,
             "width": width,
-            "height": height
-        }).encode("utf-8")
+        }
+        if height is not None:
+            payload_data["height"] = height
+
+        payload = json.dumps(payload_data).encode("utf-8")
 
         req = urllib.request.Request(
             url,
@@ -138,7 +141,7 @@ class MyPlugin(Star):
                     self.render_local_t2i_bytes,
                     html,
                     1180,
-                    760,
+                    None,
                 )
                 tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
                 try:
