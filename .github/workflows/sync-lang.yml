@@ -1,0 +1,56 @@
+name: Sync War Thunder Lang
+
+on:
+  schedule:
+    - cron: '0 0 * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout current repository
+        uses: actions/checkout@v4
+      - name: Checkout War Thunder Datamine
+        uses: actions/checkout@v4
+        with:
+          repository: gszabi99/War-Thunder-Datamine
+          path: upstream
+          sparse-checkout: |
+            lang
+          sparse-checkout-cone-mode: true
+          fetch-depth: 1
+
+      - name: Remove old lang
+        run: rm -rf lang
+
+      - name: Copy new lang
+        run: cp -a upstream/lang ./lang
+
+      - name: Cleanup
+        run: rm -rf upstream
+
+      - name: Check changes
+        id: changes
+        run: |
+          git add lang
+
+          if git diff --cached --quiet; then
+            echo "changed=false" >> $GITHUB_OUTPUT
+          else
+            echo "changed=true" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git commit -m "chore: sync lang from War-Thunder-Datamine"
+
+      - name: Push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git push
