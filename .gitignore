@@ -209,3 +209,6 @@ __marimo__/
 #fonts
 *.otf
 *.ttf
+
+#debug
+debug/

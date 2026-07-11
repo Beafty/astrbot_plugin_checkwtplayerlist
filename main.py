@@ -3,6 +3,7 @@ import json
 import tempfile
 import urllib.request
 from pathlib import Path
+from datetime import datetime
 import base64
 from jinja2 import Template
 from astrbot.api.event import filter, AstrMessageEvent
@@ -99,24 +100,16 @@ class MyPlugin(Star):
         return images, texts
 
     def get_t2i_mode(self):
-        try:
-            mode = self.config.get("t2i_mode", "astrbot")
-        except AttributeError:
-            try:
-                mode = self.config["t2i_mode"]
-            except KeyError:
-                mode = "astrbot"
-        return str(mode or "astrbot").strip().lower()
+        return "local" if self.config.get("use_local_t2i", False) else "astrbot"
 
     def get_local_t2i_url(self):
+        if not self.config.get("use_local_t2i", False):
+            return ""
         try:
-            url = self.config.get("local_t2i_url", "http://127.0.0.1:7778/text2img")
+            local_t2i_url = self.config.get("local_t2i_url", "")
         except AttributeError:
-            try:
-                url = self.config["local_t2i_url"]
-            except KeyError:
-                url = "http://127.0.0.1:7778/text2img"
-        return str(url or "").strip()
+            local_t2i_url = ""
+        return str(local_t2i_url or "").strip()
 
     def render_local_t2i_bytes(self, html: str, width: int, height: int | None = None):
         url = self.get_local_t2i_url()
@@ -170,6 +163,40 @@ class MyPlugin(Star):
             logger.warning(f"HTML 渲染图片失败: {e}")
             return event.plain_result(format_api_result(result))
 
+    def get_debug_config(self):
+        try:
+            debug_cfg = self.config.get("debug", {})
+        except AttributeError:
+            try:
+                debug_cfg = self.config["debug"]
+            except KeyError:
+                debug_cfg = {}
+        return debug_cfg if isinstance(debug_cfg, dict) else {}
+
+    def get_debug_save_json(self):
+        debug_cfg = self.get_debug_config()
+        return bool(debug_cfg.get("save_json", False))
+
+    def get_debug_json_dir(self):
+        debug_cfg = self.get_debug_config()
+        return str(debug_cfg.get("json_dir", "debug")).strip() or "debug"
+
+    def _save_debug_json(self, result, room_id: str | None = None):
+        if not self.get_debug_save_json():
+            return
+        try:
+            out_dir = Path(__file__).resolve().parent / self.get_debug_json_dir()
+            out_dir.mkdir(parents=True, exist_ok=True)
+
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_room_id = room_id or "unknown"
+            file_path = out_dir / f"{ts}_{safe_room_id}.json"
+
+            with file_path.open("w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"保存调试 JSON 失败: {e}")
+
     @filter.command("room")
     async def room(self, event: AstrMessageEvent):
         api = self.get_api()
@@ -194,7 +221,10 @@ class MyPlugin(Star):
         if not check_room_id(room_id):
             yield event.plain_result("房间号格式错误")
             return
+
         result = await api.send_room_id(room_id)
+        self._save_debug_json(result, room_id)
+
         if result is None:
             yield event.plain_result("查询服务器异常")
             return

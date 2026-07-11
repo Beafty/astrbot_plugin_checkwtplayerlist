@@ -3,6 +3,19 @@ import csv
 from pathlib import Path
 from functools import lru_cache
 
+UNIT_ID_COLUMN = "<ID|readonly|noverify>"
+ZH_NAME_COLUMNS = ("<Chinese>", "<TChinese>", "<HChinese>")
+
+def get_unit_id(row: dict) -> str:
+    return (row.get(UNIT_ID_COLUMN) or "").strip().strip('"')
+
+def get_unit_zh_name(row: dict) -> str:
+    for col in ZH_NAME_COLUMNS:
+        value = (row.get(col) or "").strip().strip('"')
+        if value:
+            return value
+    return ""
+
 @lru_cache(maxsize=1)
 def load_units_name_map():
     units_name_map = {}
@@ -14,13 +27,8 @@ def load_units_name_map():
     with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
-            unit_id = (row.get("<ID|readonly|noverify>") or "").strip().strip('"')
-            zh_name = (
-                row.get("<Chinese>")
-                or row.get("<TChinese>")
-                or row.get("<HChinese>")
-                or ""
-            ).strip().strip('"')
+            unit_id = get_unit_id(row)
+            zh_name = get_unit_zh_name(row)
 
             if not unit_id or not zh_name:
                 continue
@@ -60,12 +68,12 @@ def convert_mrank_to_br(mrank: str):
         int_part = int(br_val)
         frac = br_val - int_part
         if frac < 0.2:
-            s_frac = ".0"
+            br_suffix = ".0"
         elif frac < 0.5:
-            s_frac = ".3"
+            br_suffix = ".3"
         else:
-            s_frac = ".7"
-        return f"{int_part}{s_frac}"
+            br_suffix = ".7"
+        return f"{int_part}{br_suffix}"
     except (ValueError, TypeError):
         return str(mrank)
 
@@ -78,11 +86,11 @@ def extract_room_payload(result):
     return result, result.get("task", "")
 
 def get_players(room_data):
-    public = room_data.get("public", {}) if isinstance(room_data, dict) else {}
-    if not isinstance(public, dict):
+    public_players = room_data.get("public", {}) if isinstance(room_data, dict) else {}
+    if not isinstance(public_players, dict):
         return []
     players = [
-        p for p in public.values()
+        p for p in public_players.values()
         if isinstance(p, dict) and "id" in p and "name" in p and "team" in p
     ]
     return sorted(
@@ -122,11 +130,11 @@ def player_crafts_text(player):
 
     crafts = player.get("crafts")
     if isinstance(crafts, dict) and crafts:
-        return ", ".join(translate_unit_name(str(v)) for _, v in sorted(crafts.items()))
+        return ", ".join(translate_unit_name(str(unit_name)) for craft_id, unit_name in sorted(crafts.items()))
     return "-"
 
 def format_api_result(result):
-    room_data, _ = extract_room_payload(result)
+    room_data, request_task = extract_room_payload(result)
     room_id = room_data.get("roomId") or room_data.get("room_id") or room_data.get("id") or ""
     players = get_players(room_data)
     lines = ["查询成功"]
@@ -145,11 +153,21 @@ def format_api_result(result):
         return json.dumps(result, ensure_ascii=False)
     return "\n".join(lines)
 
+CLUSTER_NAME_MAP = {
+    "SA": "亚服",
+    "EU": "欧服",
+    "NA": "美服",
+    "CIS": "俄服",
+}
+def format_cluster(cluster):
+    return CLUSTER_NAME_MAP.get(cluster, "-") if cluster else "-"
+
 def build_room_render_data(result):
-    room_data, _ = extract_room_payload(result)
+    room_data, request_task = extract_room_payload(result)
     players = get_players(room_data)
     room_id = room_data.get("roomId") or room_data.get("room_id") or room_data.get("id") or "-"
     grouped = {}
+    cluster = format_cluster(room_data.get("public", {}).get("cluster"))
     for player in players:
         grouped.setdefault(player.get("team", "-"), []).append(player)
 
@@ -178,4 +196,5 @@ def build_room_render_data(result):
         "room_id": room_id,
         "player_count": len(players),
         "teams": teams,
+        "cluster": cluster,
     }

@@ -177,6 +177,7 @@ tr:last-child td {
             <h1>玩家列表</h1>
             <div class="meta">
                 <span class="badge">房间 {{ room_id|e }}</span>
+                <span class="badge">服务器 {{ cluster|e }}</span>
             </div>
         </div>
         <div class="count">
