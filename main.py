@@ -182,7 +182,9 @@ class MyPlugin(Star):
         return str(debug_cfg.get("json_dir", "debug")).strip() or "debug"
 
     def _save_debug_json(self, result, room_id: str | None = None):
-        if not self.get_debug_save_json():
+        if result is None:
+            return
+        if not self.get_debug_save_json() or result.get("state") != "ok":
             return
         try:
             out_dir = Path(__file__).resolve().parent / self.get_debug_json_dir()
@@ -221,13 +223,15 @@ class MyPlugin(Star):
         if not check_room_id(room_id):
             yield event.plain_result("房间号格式错误")
             return
-
+        yield event.plain_result(f"识别到房间号{room_id}")
         result = await api.send_room_id(room_id)
-        self._save_debug_json(result, room_id)
 
         if result is None:
             yield event.plain_result("查询服务器异常")
             return
+
+        self._save_debug_json(result, room_id)
+
         if isinstance(result, dict) and "state" in result and result.get("state") != "ok":
             yield event.plain_result(f"查询失败: {result.get('state', 'unknown')}")
             return

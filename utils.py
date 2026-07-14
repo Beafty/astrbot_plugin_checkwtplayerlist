@@ -6,10 +6,10 @@ from functools import lru_cache
 UNIT_ID_COLUMN = "<ID|readonly|noverify>"
 ZH_NAME_COLUMNS = ("<Chinese>", "<TChinese>", "<HChinese>")
 
-def get_unit_id(row: dict) -> str:
+def get_id(row: dict) -> str:
     return (row.get(UNIT_ID_COLUMN) or "").strip().strip('"')
 
-def get_unit_zh_name(row: dict) -> str:
+def get_zh_name(row: dict) -> str:
     for col in ZH_NAME_COLUMNS:
         value = (row.get(col) or "").strip().strip('"')
         if value:
@@ -27,8 +27,8 @@ def load_units_name_map():
     with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
         reader = csv.DictReader(f, delimiter=";")
         for row in reader:
-            unit_id = get_unit_id(row)
-            zh_name = get_unit_zh_name(row)
+            unit_id = get_id(row)
+            zh_name = get_zh_name(row)
 
             if not unit_id or not zh_name:
                 continue
@@ -36,9 +36,27 @@ def load_units_name_map():
             units_name_map[unit_id] = zh_name
 
             if unit_id.endswith("_shop"):
-                units_name_map[unit_id[:-5]] = zh_name
+                units_name_map[unit_id[:-len("_shop")]] = zh_name
 
     return units_name_map
+
+@lru_cache(maxsize=1)
+def load_unit_type():
+    unit_type_map = {}
+    csv_path = Path(__file__).resolve().parent / "lang" / "menu.csv"
+    if not csv_path.exists():
+        return unit_type_map
+    with csv_path.open("r", encoding="utf-8-sig", newline="") as f:
+        reader = csv.DictReader(f, delimiter=";")
+        for row in reader:
+            unit_type = get_id(row)
+            zh_name = get_zh_name(row)
+            if not unit_type or not zh_name:
+                continue
+            unit_type_map[unit_type] = zh_name
+            if unit_type.startswith("mainmenu/type_"):
+                unit_type_map[unit_type[len("mainmenu/type_"):]] = zh_name
+    return unit_type_map
 
 def translate_unit_name(name: str):
     if not name:
@@ -50,6 +68,17 @@ def translate_unit_name(name: str):
         return mp[name]
 
     return mp.get(name.split("/")[-1], name)
+
+def translate_unit_type(unit_type: str):
+    if not unit_type:
+        return unit_type
+    unit_type = str(unit_type).strip()
+    mp = load_unit_type()
+
+    if unit_type in mp:
+        return mp[unit_type]
+
+    return mp.get(unit_type.split("/")[-1], unit_type)
 
 def check_room_id(room_id: str):
     if room_id is None:
@@ -111,7 +140,7 @@ def player_crafts_text(player):
             if not isinstance(craft, dict):
                 continue
             name = translate_unit_name(craft.get("name") or "未知载具")
-            ctype = craft.get("type") or ""
+            ctype = translate_unit_type(craft.get("type") or "")
             rank = craft.get("rank")
             mrank = craft.get("mrank")
             detail = str(name)

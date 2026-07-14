@@ -43,6 +43,16 @@ h1 {
     display: flex;
     gap: 12px;
 }
+.footer {
+    padding-top: 8px;
+    color: #1B5E20;
+    font-size: 32px;
+    text-align: center;
+    line-height: 0.5;
+}
+.footer2{
+    padding-left: 18px;
+}
 .badge {
     padding: 7px 12px;
     border: 1px solid rgba(255,255,255,.28);
@@ -230,6 +240,14 @@ tr:last-child td {
     {% if not teams %}
     <div class="empty">未在 JSON 的 public 字段中找到玩家列表</div>
     {% endif %}
+</div>
+<div class="footer">
+    <p>使用方法：在群内发送/room加左下角房间号或当前游戏界面截图。</p>
+    <p>Beta Test! 限时测试中，拉机器人入群即可使用。（推荐在联队赛猜测对方阵容时候使用）</p>
+    <p>Powered by AstrBotWTcheck</p>
+</div>
+<div class="footer2">
+    <p>插件已开源:github.com/Beafty/astrbot_plugin_checkwtplayerlist</p>
 </div>
 </body>
 </html>
