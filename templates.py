@@ -150,6 +150,9 @@ tr:last-child td {
     color: #6b7280;
     font-size: 12px;
 }
+.player small .clan {
+    font-family: "SkyquakeSymbols", "Microsoft YaHei", Arial, sans-serif;
+}
 /* 载具 */
 .craft {
     font-family:
@@ -220,7 +223,7 @@ tr:last-child td {
                         <td>
                             <div class="player">
                                 <span>{{ player.name|e }}</span>
-                                <small>{{ player.clan|e }} · ID {{ player.id|e }}</small>
+                                <small><span class="clan">{{ player.clan|e }}</span> · ID {{ player.id|e }}</small>
                             </div>
                         </td>
                         <td>{{ player.crafts|safe }}</td>
