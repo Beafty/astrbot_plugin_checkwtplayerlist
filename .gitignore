@@ -212,3 +212,6 @@ __marimo__/
 
 #debug
 debug/
+debug_replay/
+.claude/
+.agents/

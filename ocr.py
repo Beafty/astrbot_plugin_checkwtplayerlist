@@ -22,7 +22,14 @@ class OCRHelper:
     def extract_room_id(self, text: str):
         result = re.findall(r"[0-9a-f]{15}", text)
         return result[0] if result else None
-    def _run_sync(self, image_path):
+
+    def extract_replay_id(self, text: str):
+        result = re.findall(r"[0-9a-f]{15}", text)
+        return result[0] if result else None
+
+    def _run_sync(self, image_path, extractor=None):
+        if extractor is None:
+            extractor = self.extract_room_id
         if self.ocr is None:
             return None
         img = cv2.imread(image_path)
@@ -39,13 +46,22 @@ class OCRHelper:
             []
         )
         for text in rec_texts:
-            room_id = self.extract_room_id(text)
-            if room_id:
-                return room_id
+            extracted = extractor(text)
+            if extracted:
+                return extracted
         return None
+
     async def recognize(self, image_path):
         async with self.lock:
             return await asyncio.to_thread(
                 self._run_sync,
                 image_path
+            )
+
+    async def recognize_replay(self, image_path):
+        async with self.lock:
+            return await asyncio.to_thread(
+                self._run_sync,
+                image_path,
+                self.extract_replay_id
             )

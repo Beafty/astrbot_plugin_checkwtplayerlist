@@ -227,3 +227,272 @@ def build_room_render_data(result):
         "teams": teams,
         "cluster": cluster,
     }
+
+
+def check_replay_id(replay_id: str):
+    if replay_id is None:
+        return False
+    replay_id = str(replay_id).strip().lower()
+    if not replay_id:
+        return False
+    if replay_id.startswith("0x"):
+        replay_id = replay_id[2:]
+    if all(c in "0123456789abcdef" for c in replay_id):
+        return len(replay_id) <= 16
+    return replay_id.isdigit()
+
+
+def format_replay_time(seconds):
+    if seconds is None:
+        return "-"
+    try:
+        s = float(seconds)
+        m = int(s) // 60
+        sec = int(s) % 60
+        return f"{m:02d}:{sec:02d}"
+    except (ValueError, TypeError):
+        return str(seconds)
+
+
+SQUAD_COLORS = [
+    "#E8F5E9", "#E3F2FD", "#FFF3E0", "#F3E5F5", "#E0F7FA",
+    "#FFF9C4", "#F1F8E9", "#FCE4EC", "#EDE7F6", "#EFEBE9",
+    "#E8EAF6", "#FFF8E1", "#E0F2F1", "#FBE9E7", "#F1F8E9",
+]
+
+
+def _assign_squad_colors(scores):
+    squad_color_map = {}
+    color_idx = 0
+    for s in scores:
+        if s.get("autoSquad", True):
+            continue
+        sid = s.get("squadId", -1)
+        if sid == -1 or sid is None:
+            continue
+        if sid not in squad_color_map:
+            squad_color_map[sid] = SQUAD_COLORS[color_idx % len(SQUAD_COLORS)]
+            color_idx += 1
+    return squad_color_map
+
+
+def _assign_squad_groups(scores):
+    squad_group_map = {}
+    group_idx = 1
+    for s in scores:
+        if s.get("autoSquad", True):
+            continue
+        sid = s.get("squadId", -1)
+        if sid == -1 or sid is None:
+            continue
+        if sid not in squad_group_map:
+            squad_group_map[sid] = group_idx
+            group_idx += 1
+    return squad_group_map
+
+
+SCORE_COLUMN_ORDER = [
+    ("autoSquad",        "预组队"),
+    ("_name",            "玩家"),
+    ("score",            "得分"),
+    ("kills",            "空军"),
+    ("groundKills",      "地面"),
+    ("assists",          "助攻"),
+    ("aiKills",          "AI"),
+    ("captureZone",      "占点"),
+    ("deaths",           "死亡"),
+    ("missileEvades",    "规避导弹"),
+]
+VISIBLE_KEYS = {k for k, _ in SCORE_COLUMN_ORDER}
+
+
+def _compute_hidden_cols(scores):
+    if not scores:
+        return set()
+    all_numeric = [
+        "kills", "deaths", "assists", "score",
+        "groundKills", "captureZone", "damageZone",
+        "humanKills", "teamKills", "aiKills", "navalKills",
+        "missionKills", "missileEvades", "shellInterceptions", "awardDamage",
+    ]
+    hidden = set()
+    for field in all_numeric:
+        if field not in VISIBLE_KEYS:
+            hidden.add(field)
+        elif all(s.get(field, 0) == 0 for s in scores):
+            hidden.add(field)
+    if all(s.get("autoSquad", False) for s in scores):
+        hidden.add("autoSquad")
+    return hidden
+
+
+def _build_team_columns(team_id):
+    order = list(SCORE_COLUMN_ORDER)
+    if str(team_id) == "1":
+        order = list(reversed(order))
+    return [{"key": k, "label": l} for k, l in order]
+
+
+def build_replay_render_data(result):
+    data = result.get("data", {}) if isinstance(result, dict) else {}
+    scores = data.get("scores", []) or []
+    events = data.get("events", []) or []
+    vehicles = data.get("vehicles", []) or []
+
+    kill_events = [e for e in events if isinstance(e, dict) and e.get("type") == "kill"]
+    kill_events.sort(key=lambda e: e.get("t", 0))
+
+    squad_color_map = _assign_squad_colors(scores)
+    squad_group_map = _assign_squad_groups(scores)
+
+    grouped = {}
+    for s in scores:
+        if not isinstance(s, dict):
+            continue
+        grouped.setdefault(s.get("team", "-"), []).append(s)
+
+    scores_teams = []
+    for team_id in sorted(grouped.keys(), key=lambda t: (str(t).isdigit(), str(t))):
+        team_scores = grouped[team_id]
+        team_scores.sort(key=lambda s: s.get("score", 0), reverse=True)
+        rendered = []
+        for i, s in enumerate(team_scores):
+            sid = s.get("squadId", -1)
+            rendered.append({
+                "rank": i + 1,
+                "name": s.get("name", "-"),
+                "kills": s.get("kills", 0),
+                "deaths": s.get("deaths", 0),
+                "assists": s.get("assists", 0),
+                "score": s.get("score", 0),
+                "groundKills": s.get("groundKills", 0),
+                "captureZone": s.get("captureZone", 0),
+                "damageZone": s.get("damageZone", 0),
+                "humanKills": s.get("humanKills", 0),
+                "teamKills": s.get("teamKills", 0),
+                "aiKills": s.get("aiKills", 0),
+                "navalKills": s.get("navalKills", 0),
+                "missionKills": s.get("missionKills", 0),
+                "missileEvades": s.get("missileEvades", 0),
+                "shellInterceptions": s.get("shellInterceptions", 0),
+                "awardDamage": s.get("awardDamage", 0),
+                "autoSquad": s.get("autoSquad", False),
+                "squad_group": squad_group_map.get(sid, 0),
+                "clan": s.get("clan") or s.get("clanTag") or "",
+                "squadId": sid,
+                "squad_color": squad_color_map.get(sid, ""),
+            })
+        scores_teams.append({
+            "id": team_id,
+            "player_count": len(rendered),
+            "scores": rendered,
+            "columns": _build_team_columns(team_id),
+        })
+
+    rendered_kills = []
+    name_team_map = {s.get("name", ""): s.get("team", "-") for s in scores if isinstance(s, dict)}
+    for e in kill_events:
+        k_name = e.get("k_name", "-")
+        v_name = e.get("v_name", "-")
+        rendered_kills.append({
+            "t": format_replay_time(e.get("t")),
+            "k_name": k_name,
+            "k_team": name_team_map.get(k_name, "-"),
+            "k_model": e.get("k_model_i18n") or e.get("k_model", "-"),
+            "weapon": e.get("weapon_i18n") or e.get("weapon", "-"),
+            "v_name": v_name,
+            "v_team": name_team_map.get(v_name, "-"),
+            "v_model": e.get("v_model_i18n") or e.get("v_model", "-"),
+            "destroyed": e.get("destroyed", ""),
+            "destroyed_i18n": e.get("destroyed_i18n", ""),
+        })
+
+    rendered_vehicles = []
+    for v in vehicles:
+        if not isinstance(v, dict):
+            continue
+        vlist = v.get("vehicles", []) or []
+        parts = []
+        for vh in vlist:
+            name = vh.get("model_i18n") or vh.get("model", "?")
+            count = vh.get("count", 0)
+            parts.append(f"{name} x{count}")
+        rendered_vehicles.append({
+            "name": v.get("name", "-"),
+            "team": v.get("team", "-"),
+            "vehicle_text": " / ".join(parts) if parts else "-",
+        })
+
+    return {
+        "replay_id": data.get("session_id") or result.get("replay_id", "-"),
+        "duration": format_replay_time(data.get("duration")),
+        "packets": data.get("packets", 0),
+        "parse_time_ms": data.get("parse_time_ms", 0),
+        "player_count": len(scores),
+        "kill_count": len(kill_events),
+        "scores_teams": scores_teams,
+        "kill_events": rendered_kills,
+        "vehicles": rendered_vehicles,
+        "hidden_cols": _compute_hidden_cols(scores),
+    }
+
+
+def build_scores_render_data(result):
+    data = result.get("data", {}) if isinstance(result, dict) else {}
+    scores = data.get("scores", []) or []
+
+    squad_color_map = _assign_squad_colors(scores)
+    squad_group_map = _assign_squad_groups(scores)
+
+    grouped = {}
+    for s in scores:
+        if not isinstance(s, dict):
+            continue
+        grouped.setdefault(s.get("team", "-"), []).append(s)
+
+    scores_teams = []
+    for team_id in sorted(grouped.keys(), key=lambda t: (str(t).isdigit(), str(t))):
+        team_scores = grouped[team_id]
+        team_scores.sort(key=lambda s: s.get("score", 0), reverse=True)
+        rendered = []
+        for i, s in enumerate(team_scores):
+            sid = s.get("squadId", -1)
+            rendered.append({
+                "rank": i + 1,
+                "name": s.get("name", "-"),
+                "kills": s.get("kills", 0),
+                "deaths": s.get("deaths", 0),
+                "assists": s.get("assists", 0),
+                "score": s.get("score", 0),
+                "groundKills": s.get("groundKills", 0),
+                "captureZone": s.get("captureZone", 0),
+                "damageZone": s.get("damageZone", 0),
+                "humanKills": s.get("humanKills", 0),
+                "teamKills": s.get("teamKills", 0),
+                "aiKills": s.get("aiKills", 0),
+                "navalKills": s.get("navalKills", 0),
+                "missionKills": s.get("missionKills", 0),
+                "missileEvades": s.get("missileEvades", 0),
+                "shellInterceptions": s.get("shellInterceptions", 0),
+                "awardDamage": s.get("awardDamage", 0),
+                "autoSquad": s.get("autoSquad", False),
+                "squad_group": squad_group_map.get(sid, 0),
+                "clan": s.get("clanTag", ""),
+                "squadId": sid,
+                "squad_color": squad_color_map.get(sid, ""),
+            })
+        scores_teams.append({
+            "id": team_id,
+            "player_count": len(rendered),
+            "scores": rendered,
+            "columns": _build_team_columns(team_id),
+        })
+
+    return {
+        "replay_id": data.get("session_id", "-"),
+        "mission": data.get("mission", "-"),
+        "player_count": len(scores),
+        "parse_time_ms": data.get("parse_time_ms", 0),
+        "scores_teams": scores_teams,
+        "hidden_cols": _compute_hidden_cols(scores),
+    }

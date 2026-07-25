@@ -29,6 +29,24 @@
         "default": "http://127.0.0.1:7778/text2img",
         "hint": "仅在启用本地文生图时使用"
     },
+    "replay_api_url": {
+        "description": "Replay API地址",
+        "type": "string",
+        "default": "http://127.0.0.1:25580",
+        "hint": "Replay解析服务地址"
+    },
+    "replay_api_method": {
+        "description": "Replay API请求方法",
+        "type": "string",
+        "default": "POST",
+        "hint": "GET/POST"
+    },
+    "replay_use_proxy": {
+        "description": "使用代理（实验性）",
+        "type": "bool",
+        "default": false,
+        "hint": "通过代理下载回放文件以加速"
+    },
     "debug": {
         "description": "调试选项",
         "type": "object",
