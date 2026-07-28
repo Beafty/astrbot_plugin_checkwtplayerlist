@@ -88,6 +88,33 @@ class MyPlugin(Star):
             except KeyError:
                 return False
 
+    def get_replay_debug_config(self):
+        try:
+            dc = self.config.get("replay_debug", {})
+        except AttributeError:
+            try:
+                dc = self.config["replay_debug"]
+            except KeyError:
+                dc = {}
+        return dc if isinstance(dc, dict) else {}
+
+    def _save_replay_debug_json(self, result, replay_id):
+        if not self.get_replay_debug_config().get("save_json", False):
+            return
+        if not isinstance(result, dict) or not result.get("ok"):
+            return
+        try:
+            out_dir = Path(__file__).resolve().parent / self.get_replay_debug_config().get("json_dir", "debug_replay")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+            safe_id = replay_id or "unknown"
+            file_path = out_dir / f"replay_{ts}_{safe_id}.json"
+            with file_path.open("w", encoding="utf-8") as f:
+                json.dump(result, f, ensure_ascii=False, indent=2)
+            logger.info(f"调试JSON已保存: {file_path}")
+        except Exception:
+            pass
+
     def get_replay_api(self):
         url = self.get_replay_api_url()
         method = self.get_replay_api_method()
@@ -387,6 +414,7 @@ class MyPlugin(Star):
             detail = result.get("detail") or result.get("error") or "unknown"
             yield event.plain_result(f"回放解析失败: {detail}")
             return
+        self._save_replay_debug_json(result, replay_id)
         yield await self.make_replay_result(event, result)
 
     @filter.command("score")
@@ -428,6 +456,7 @@ class MyPlugin(Star):
             detail = result.get("detail") or result.get("error") or "unknown"
             yield event.plain_result(f"记分板解析失败: {detail}")
             return
+        self._save_replay_debug_json(result, replay_id)
         yield await self.make_scores_result(event, result)
 
     async def terminate(self):

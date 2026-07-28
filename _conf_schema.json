@@ -64,5 +64,23 @@
                 "hint": "相对插件目录的保存路径"
             }
         }
+    },
+    "replay_debug": {
+        "description": "Replay调试选项",
+        "type": "object",
+        "items": {
+            "save_json": {
+                "description": "保存replay/score返回JSON到本地",
+                "type": "bool",
+                "default": false,
+                "hint": "调试时保存回放解析原始JSON"
+            },
+            "json_dir": {
+                "description": "调试JSON保存目录",
+                "type": "string",
+                "default": "debug_replay",
+                "hint": "相对插件目录的保存路径"
+            }
+        }
     }
 }
